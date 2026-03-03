@@ -1,51 +1,38 @@
-# Compiler and flags
-CC = gcc
-CXX = g++
-CFLAGS = -Wall -Wextra -std=gnu99 -O2 -I.
-CXXFLAGS = -Wall -Wextra -std=c++11 -g -O0 -I. -Itests
-LDFLAGS = 
+CC ?= cc
+CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2 -g
+LDFLAGS ?=
 
-# Coverage flags
-COVERAGE_FLAGS = --coverage
+# Sources and objects (support files in subdirectories)
+SRCS := $(wildcard *.c */*.c)
+OBJS := $(SRCS:.c=.o)
 
-# Build directory
-BUILD_DIR = build
+# Binaries to build. If you add new top-level programs, list them here.
+BINS := example
 
-# Targets
-all: $(BUILD_DIR)/example
+all: $(BINS)
 
-$(BUILD_DIR)/example: $(BUILD_DIR)/example.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+# Default example target: link example from its object(s)
+example: example.o $(filter-out example.o,$(OBJS))
+	$(CC) $(LDFLAGS) -o $@ $^
 
-$(BUILD_DIR)/example.o: example.c http.h | $(BUILD_DIR)
+# Pattern rule: compile C sources to same relative .o paths
+%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Test target using custom C framework
-TEST_SRCS = tests/test_runner.c tests/test_utils.c tests/test_status.c tests/test_mem_pool.c tests/test_parser.c tests/test_server.c tests/globals.c
-HTTP_IMPL_OBJ = $(BUILD_DIR)/http_impl.o
-
-$(BUILD_DIR)/unit_tests: $(TEST_SRCS) $(HTTP_IMPL_OBJ) http.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $@ $(TEST_SRCS) $(HTTP_IMPL_OBJ) $(LDFLAGS)
-
-$(BUILD_DIR)/http_impl.o: tests/http_impl.c http.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -c $< -o $@
-
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
-
-test: $(BUILD_DIR)/unit_tests
-	./$(BUILD_DIR)/unit_tests
-
-coverage: $(BUILD_DIR)/unit_tests
-	./$(BUILD_DIR)/unit_tests
-	gcov -abcfu -o $(BUILD_DIR) tests/http_impl.c
-	mv *.gcov $(BUILD_DIR)/
-	@echo "\n--- Coverage Summary ---"
-	@grep "File 'http.h'" -A 1 $(BUILD_DIR)/http.h.gcov || true
-
 clean:
-	rm -rf $(BUILD_DIR) *.o *.gcno *.gcda *.gcov
+	rm -f $(OBJS) $(BINS)
 
-check: test
+distclean: clean
+	rm -f tags
 
-.PHONY: all test clean coverage check
+install: all
+	install -d $(DESTDIR)/usr/local/bin
+	install -m 0755 $(BINS) $(DESTDIR)/usr/local/bin
+
+test:
+	@if [ -x ./unit_tests ]; then ./unit_tests; else echo "unit_tests binary not found"; exit 1; fi
+
+help:
+	@printf "Usage:\n  make [all|example|clean|distclean|install|test|help]\n"
+
+.PHONY: all clean distclean install test help
